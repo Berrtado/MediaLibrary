@@ -34,29 +34,44 @@ struct AlbumDetailView: View {
     @State var album: Album
     @State private var isMediaPickerPresented: Bool = false
     @State private var selectedMediaType: MediaType = .images
+    let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4) // 4 column-based view
 
     var body: some View {
         VStack {
-            List(album.mediaItems, id: \.self) { mediaItem in
-                if mediaItem.hasSuffix(".jpg") {
-                    if let image = loadImage(name: mediaItem) {
-                        Image(uiImage: image)
+            // Display the album name
+            Text(album.name)
+                .font(.largeTitle)
+                .padding()
+
+            // Display the media items in a 4-column grid
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(album.mediaItems, id: \.self) { mediaItem in
+                        // Display each media item (you can adjust this based on whether it's an image or video)
+                        Image(mediaItem) // Placeholder, adjust as needed
                             .resizable()
                             .scaledToFit()
                     }
-                } else if mediaItem.hasSuffix(".mov") {
-                    // Handle video display here
                 }
+                .padding(16)
             }
-            
-            Button("Add Media") {
-                isMediaPickerPresented = true
+
+            // Button to add new media to the album
+            Button(action: {
+                isMediaPickerPresented.toggle()
+            }) {
+                HStack {
+                    Image(systemName: selectedMediaType == .images ? "photo" : "video")
+                    Text(selectedMediaType == .images ? "Insert Images" : "Insert Videos")
+                }
+                .padding(.horizontal, 30)
+                .padding(.vertical, 15)
+                .background(Color.black)
+                .foregroundColor(.white)
+                .cornerRadius(20)
+                .shadow(color: .gray, radius: 3, x: 1, y: 1)
+                .padding(.bottom, 16)
             }
-            .padding()
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .clipShape(Capsule())
-            .padding(.bottom)
         }
         .sheet(isPresented: $isMediaPickerPresented) {
             MediaPicker(mediaType: selectedMediaType) { result in
@@ -64,7 +79,7 @@ struct AlbumDetailView: View {
             }
         }
     }
-
+    
     func handleMedia(result: MediaResult) {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
@@ -300,130 +315,33 @@ struct GalleryView: View {
     
     
     var body: some View {
-        NavigationView {
-            VStack {
-                HStack {
-                    NavigationView {
-                        VStack {
-                            Button("Create New Album") {
-                                isCreatingAlbum = true
-                            }
-                            .sheet(isPresented: $isCreatingAlbum) {
-                                VStack {
-                                    TextField("Album Name", text: $newAlbumName)
-                                    Button("Create Album") {
-                                        let newAlbum = Album(name: newAlbumName, mediaItems: [])
-                                        albums.append(newAlbum)
-                                        isCreatingAlbum = false
-                                    }
-                                }
-                                .padding()
-                            }
-                            
-                            List(albums, id: \.name) { album in
-                                NavigationLink(destination: AlbumDetailView(album: album)) {
-                                    Text(album.name)
-                                }
-                            }
-                        }
-                        .navigationBarTitle("Albums")
-                    }
-                    
-                    
-                    Button(action: {
-                        viewingMediaType.toggle()
-                        loadItems()
-                    }) {
-                        HStack {
-                            Image(systemName: viewingMediaType == .images ? "video" : "photo")
-                                .font(.headline)
-                            
-                            Text(viewingMediaType == .images ? "Go to your Videos" : "Go to your Images")
-                                .fontWeight(.medium)
-                        }
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Color.white)
-                        .cornerRadius(20)
-                    }
-                    .id(UUID())
-                    Spacer()
-                    
-                }
-                .padding(.top, 16)
-                
-                Spacer()
-                
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(items, id: \.self) { item in
-                            mediaContent(for: item)
-                                .contextMenu {
-                                    Button(action: {
-                                        deleteItem(name: item)
-                                    }) {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                        }
-                    }
-                    .padding(16)
-                }
-                
-                Spacer()
-                
-                Button(action: {
-                    if showDeleteConfirmation {
-                        for selectedItem in selectedItems {
-                            deleteItem(name: selectedItem)
-                        }
-                        selectedItems.removeAll()
-                    }
-                    showDeleteConfirmation.toggle()
-                }) {
-                    HStack {
-                        Image(systemName: "trash.fill")
-                            .font(.headline)
-                        Text(showDeleteConfirmation ? "Delete all Selected Items" : "Select Items")
-                            .fontWeight(.medium)
-                    }
-                }
-                .foregroundColor(.black)
-                Button(action: {
-                    currentMediaType = viewingMediaType
-                    isPickerPresented.toggle()
-                }) {
-                    HStack {
-                        Image(systemName: viewingMediaType == .images ? "photo" : "video")
-                            .font(.headline)
-                        Text(viewingMediaType == .images ? "Insert Images" : "Insert Videos")
-                            .fontWeight(.medium)
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(.horizontal, 30)
-                .padding(.vertical, 15)
-                .background(Color.black)
-                .foregroundColor(.white)
-                .cornerRadius(20)
-                .shadow(color: .gray, radius: 3, x: 1, y: 1)
-                .padding(.bottom, 16)
-            }
-            .navigationBarTitle(viewingMediaType == .images ? "Your Images" : "Your Videos", displayMode: .inline)
-            .sheet(isPresented: $isPickerPresented) {
-                MediaPicker(mediaType: currentMediaType) { result in
-                    handleMedia(result: result)
-                }
-            }
-            .onAppear {
-                loadItems()
-                // Clear selected items when switching media types
-                selectedItems.removeAll()
-            }
-        }
-        
-    }
+           NavigationView {
+               VStack {
+                   Button("Create New Album") {
+                       isCreatingAlbum = true
+                   }
+                   .sheet(isPresented: $isCreatingAlbum) {
+                       VStack {
+                           TextField("Album Name", text: $newAlbumName)
+                           Button("Create Album") {
+                               let newAlbum = Album(name: newAlbumName, mediaItems: [])
+                               albums.append(newAlbum)
+                               isCreatingAlbum = false
+                           }
+                       }
+                       .padding()
+                   }
+                   
+                   List(albums, id: \.name) { album in
+                       NavigationLink(destination: AlbumDetailView(album: album)) {
+                           Text(album.name)
+                       }
+                   }
+               }
+               .navigationBarTitle("Albums")
+           }
+       }
+   
     
     func handleMedia(result: MediaResult) {
         guard var album = currentAlbum else {
@@ -451,6 +369,7 @@ struct GalleryView: View {
                 print("Photo Library access denied.")
             }
         }
+        currentAlbum = album
     }
 
     
@@ -655,3 +574,4 @@ struct GalleryView: View {
         }
     }
 }
+
