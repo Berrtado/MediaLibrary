@@ -30,6 +30,11 @@ struct Album: Codable {
     var mediaItems: [String]
 }
 
+func getDocumentsDirectory() -> URL {
+    let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+    return paths[0]
+}
+
 struct AlbumDetailView: View {
     @State var album: Album
     @State private var isMediaPickerPresented: Bool = false
@@ -47,17 +52,17 @@ struct AlbumDetailView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(album.mediaItems, id: \.self) { mediaItem in
-                        if let uiImage = loadImage(name: mediaItem) {
-                            Image(uiImage: uiImage)
+                        if mediaItem.hasSuffix(".jpg"), let image = loadImage(name: mediaItem) {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFit()
                         } else if mediaItem.hasSuffix(".mov") {
-                            // Handle video display here
-                            Text("Video Placeholder") // Just as an example
+                            Text("Video Placeholder")
                         } else {
                             EmptyView()
                         }
                     }
+
                 } // Closing brace for LazyVGrid
             }
 
@@ -88,9 +93,15 @@ struct AlbumDetailView: View {
     // All utility functions should be here, outside the body but inside the struct
 
     func loadImage(name: String) -> UIImage? {
-        guard name.lowercased().hasSuffix(".jpg") else { return nil }
-        let imagePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
-        return UIImage(contentsOfFile: imagePath.path)
+        let path = getDocumentsDirectory().appendingPathComponent(name)
+        print("Trying to load image from path: \(path)") // Debugging print statement
+        if let data = try? Data(contentsOf: path) {
+            print("Successfully loaded image: \(name)") // Debugging print statement
+            return UIImage(data: data)
+        } else {
+            print("Failed to load image: \(name)") // Debugging print statement
+            return nil
+        }
     }
     
         func saveVideo(videoURL: URL, name: String) {
@@ -618,5 +629,4 @@ struct GalleryView: View {
         }
     }
 }
-
 
