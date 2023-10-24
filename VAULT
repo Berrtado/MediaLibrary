@@ -31,82 +31,179 @@ struct Album {
 }
 
 struct AlbumDetailView: View {
-    @Binding var album: Album
-    @State private var isPickerPresented = false
-    @State private var currentMediaType: MediaType = .images
+    @State var album: Album
+    @State private var isMediaPickerPresented: Bool = false
+    @State private var selectedMediaType: MediaType = .images
 
     var body: some View {
         VStack {
             List(album.mediaItems, id: \.self) { mediaItem in
-                if mediaItem.lowercased().hasSuffix(".jpg"), let image = loadImage(name: mediaItem) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                } else if mediaItem.lowercased().hasSuffix(".mov"), let videoURL = loadVideo(name: mediaItem) {
-                    VideoPlayer(player: AVPlayer(url: videoURL))
+                if mediaItem.hasSuffix(".jpg") {
+                    if let image = loadImage(name: mediaItem) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                    }
+                } else if mediaItem.hasSuffix(".mov") {
+                    // Handle video display here
                 }
             }
+            
             Button("Add Media") {
-                isPickerPresented = true
+                isMediaPickerPresented = true
             }
-            .sheet(isPresented: $isPickerPresented) {
-                MediaPicker(mediaType: currentMediaType) { result in
-                    handleMedia(result: result)
-                }
+            .padding()
+            .background(Color.blue)
+            .foregroundColor(.white)
+            .clipShape(Capsule())
+            .padding(.bottom)
+        }
+        .sheet(isPresented: $isMediaPickerPresented) {
+            MediaPicker(mediaType: selectedMediaType) { result in
+                handleMedia(result: result)
             }
         }
-        .navigationBarTitle(album.name)
     }
-    
+
     func handleMedia(result: MediaResult) {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
                 switch result {
                 case .images(let images):
                     for image in images {
-                        let itemName = UUID().uuidString
-                        self.saveImage(image: image, name: itemName)
-                        if self.currentMediaType == .images {
-                            self.items.append(itemName + ".jpg")
-                        }
-                        self.loadItems()
+                        let itemName = UUID().uuidString + ".jpg"
+                        saveImage(image: image, name: itemName)
+                        album.mediaItems.append(itemName)
                     }
                 case .videos(let urls):
                     for url in urls {
-                        let itemName = UUID().uuidString
-                        if self.currentMediaType == .videos {
-                            self.items.append(itemName + ".mov")
-                        }
-                        self.loadItems()
+                        let itemName = UUID().uuidString + ".mov"
+                        // Handle video saving here
+                        album.mediaItems.append(itemName)
                     }
                 }
             } else {
                 print("Photo Library access denied.")
             }
         }
+    }
     
-    switch result {
-           case .images(let images):
-               for image in images {
-                   let itemName = UUID().uuidString
-                   saveImage(image: image, name: itemName)
-                   album.mediaItems.append(itemName + ".jpg")
-               }
-           case .videos(let urls):
-               for url in urls {
-                   let itemName = UUID().uuidString
-                   album.mediaItems.append(itemName + ".mov")
-               }
-           }
+    func loadImage(name: String) -> UIImage? {
+          guard name.lowercased().hasSuffix(".jpg") else { return nil }
+          
+          let imagePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
+          return UIImage(contentsOfFile: imagePath.path)
+      }
+
+      func saveImage(image: UIImage, name: String) {
+          if let data = image.jpegData(compressionQuality: 1.0) {
+              let filename = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
+              try? data.write(to: filename)
+          }
+      }
+  }
+
+struct MediaPicker: UIViewControllerRepresentable {
+    var mediaType: MediaType
+    var completionHandler: (MediaResult) -> Void
+    
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.selectionLimit = 0
+        switch mediaType {
+        case .images:
+            config.filter = .images
+        case .videos:
+            config.filter = .videos
+        }
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    static func getDocumentsDirectory() -> URL {
+           let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+           return paths[0]
        }
-   }
+    
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    final class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        var parent: MediaPicker
+        
+        init(_ parent: MediaPicker) {
+            self.parent = parent
+        }
+        
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            switch parent.mediaType {
+            case .images:
+                var selectedImages: [UIImage] = []
+                for result in results {
+                    result.itemProvider.loadObject(ofClass: UIImage.self) { (object, error) in
+                        if let image = object as? UIImage {
+                            selectedImages.append(image)
+                        }
+                        if results.last == result {
+                            self.parent.completionHandler(.images(selectedImages))
+                        }
+                    }
+                }
+            case .videos:
+                   var selectedVideos: [URL] = []
+                   let group = DispatchGroup()
+                   
+                for result in results {
+                    group.enter()  // enter the group for each video result
+                    
+                    result.itemProvider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { (url, error) in
+                        if let videoURL = url {
+                            let newName = UUID().uuidString
+                            let newPath = self.saveVideo(videoURL: videoURL, name: newName)
+                            selectedVideos.append(newPath)
+                        }
+                        group.leave()  // leave the group after processing the video
+                    }
+                }
+
+                   group.notify(queue: .main) {
+                       // Once all videos are processed, complete the picker action
+                       self.parent.completionHandler(.videos(selectedVideos))
+                       picker.dismiss(animated: true)
+                   }
+               }
+           
+            
+            picker.dismiss(animated: true)
+        }
+        
+        private func saveVideo(videoURL: URL, name: String) -> URL {
+            let fileManager = FileManager.default
+            let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let newPath = documentsDirectory.appendingPathComponent(name + ".mov")
+
+            do {
+                try fileManager.copyItem(at: videoURL, to: newPath)
+            } catch {
+                print("Error copying video: \(error)")
+            }
+
+            return newPath
+        }
+    }
+}
+
 
 struct GalleryView: View {
     
     @State private var albums: [Album] = []
     @State private var isCreatingAlbum = false
     @State private var newAlbumName = ""
-
+    
     @State private var selectedItems: Set<String> = []
     @State private var items: [String] = []
     @State private var isPickerPresented: Bool = false
@@ -116,7 +213,7 @@ struct GalleryView: View {
     
     var imageAlbums: [String: [String]] = [:]  // ["AlbumName": ["item1.jpg", "item2.jpg", ...]]
     var videoAlbums: [String: [String]] = [:]  // ["AlbumName": ["item1.mov", "item2.mov", ...]]
-
+    
     // To track the current album being viewed or modified
     @State private var currentImageAlbum: String?
     @State private var currentVideoAlbum: String?
@@ -198,7 +295,7 @@ struct GalleryView: View {
     
     // Define the layout of the grid
     let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 16), count: 6)
-
+    
     
     var body: some View {
         NavigationView {
@@ -229,7 +326,7 @@ struct GalleryView: View {
                         }
                         .navigationBarTitle("Albums")
                     }
-
+                    
                     
                     Button(action: {
                         viewingMediaType.toggle()
@@ -275,22 +372,22 @@ struct GalleryView: View {
                 Spacer()
                 
                 Button(action: {
-                           if showDeleteConfirmation {
-                               for selectedItem in selectedItems {
-                                   deleteItem(name: selectedItem)
-                               }
-                               selectedItems.removeAll()
-                           }
-                           showDeleteConfirmation.toggle()
-                       }) {
-                           HStack {
-                               Image(systemName: "trash.fill")
-                                   .font(.headline)
-                               Text(showDeleteConfirmation ? "Delete all Selected Items" : "Select Items")
-                                   .fontWeight(.medium)
-                           }
-                       }
-                       .foregroundColor(.black)
+                    if showDeleteConfirmation {
+                        for selectedItem in selectedItems {
+                            deleteItem(name: selectedItem)
+                        }
+                        selectedItems.removeAll()
+                    }
+                    showDeleteConfirmation.toggle()
+                }) {
+                    HStack {
+                        Image(systemName: "trash.fill")
+                            .font(.headline)
+                        Text(showDeleteConfirmation ? "Delete all Selected Items" : "Select Items")
+                            .fontWeight(.medium)
+                    }
+                }
+                .foregroundColor(.black)
                 Button(action: {
                     currentMediaType = viewingMediaType
                     isPickerPresented.toggle()
@@ -312,16 +409,16 @@ struct GalleryView: View {
                 .padding(.bottom, 16)
             }
             .navigationBarTitle(viewingMediaType == .images ? "Your Images" : "Your Videos", displayMode: .inline)
-                       .sheet(isPresented: $isPickerPresented) {
-                           MediaPicker(mediaType: currentMediaType) { result in
-                               handleMedia(result: result)
-                           }
-                       }
-                       .onAppear {
-                           loadItems()
-                           // Clear selected items when switching media types
-                           selectedItems.removeAll()
-                       }
+            .sheet(isPresented: $isPickerPresented) {
+                MediaPicker(mediaType: currentMediaType) { result in
+                    handleMedia(result: result)
+                }
+            }
+            .onAppear {
+                loadItems()
+                // Clear selected items when switching media types
+                selectedItems.removeAll()
+            }
         }
         
     }
@@ -387,7 +484,7 @@ struct GalleryView: View {
     @ViewBuilder
     private func mediaContent(for item: String) -> some View {
         let isSelected = selectedItems.contains(item)
-
+        
         if viewingMediaType == .images, let image = loadImage(name: item) {
             Image(uiImage: image)
                 .resizable()
@@ -426,44 +523,44 @@ struct GalleryView: View {
                     }
                 }
         } else if viewingMediaType == .videos {
-                  if let videoURL = loadVideo(name: item) {
-                      VideoPlayer(player: AVPlayer(url: videoURL))
-                          .frame(width: (UIScreen.main.bounds.width - (7 * 16)) / 6, height: 75)                          .overlay(
-                              Image(systemName: "checkmark.circle.fill")
-                                  .font(.system(size: 32))
-                                  .foregroundColor(.red)
-                                  .opacity(showDeleteConfirmation && isSelected ? 1 : 0)
-                                  .padding()
-                          )
-                          .contextMenu {
-                              Button(action: {
-                                  saveVideoToPhotosLibrary(url: videoURL)
-                              }) {
-                                  Label("Save to Camera Roll", systemImage: "square.and.arrow.down")
-                              }
-                              
-                              Button(action: {
-                                  deleteItem(name: item)
-                              }) {
-                                  Label("Delete", systemImage: "trash")
-                              }
-                          }
-                          .onTapGesture {
-                              if showDeleteConfirmation {
-                                  if isSelected {
-                                      selectedItems.remove(item)
-                                  } else {
-                                      selectedItems.insert(item)
-                                  }
-                              } else {
+            if let videoURL = loadVideo(name: item) {
+                VideoPlayer(player: AVPlayer(url: videoURL))
+                    .frame(width: (UIScreen.main.bounds.width - (7 * 16)) / 6, height: 75)                          .overlay(
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(.red)
+                            .opacity(showDeleteConfirmation && isSelected ? 1 : 0)
+                            .padding()
+                    )
+                    .contextMenu {
+                        Button(action: {
+                            saveVideoToPhotosLibrary(url: videoURL)
+                        }) {
+                            Label("Save to Camera Roll", systemImage: "square.and.arrow.down")
+                        }
+                        
+                        Button(action: {
+                            deleteItem(name: item)
+                        }) {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .onTapGesture {
+                        if showDeleteConfirmation {
+                            if isSelected {
+                                selectedItems.remove(item)
+                            } else {
+                                selectedItems.insert(item)
+                            }
+                        } else {
                             // Handle tapping on the video when not in select items mode
                         }
                     }
             }
         }
     }
-
-
+    
+    
     private var mediaButtons: some View {
         VStack(spacing: 20) {
             HStack(spacing: 30) {
@@ -504,120 +601,13 @@ struct GalleryView: View {
     }
     
     
-    func loadImage(name: String) -> UIImage? {
-        guard name.lowercased().hasSuffix(".jpg") else { return nil }
-        
-        let imagePath = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
-        return UIImage(contentsOfFile: imagePath.path)
-    }
     
-    func saveImage(image: UIImage, name: String) {
-        if let data = image.jpegData(compressionQuality: 1.0) {
-            let filename = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name).appendingPathExtension("jpg")
-            try? data.write(to: filename)
-        }
-    }
+
     
-    struct MediaPicker: UIViewControllerRepresentable {
-        var mediaType: MediaType
-        var completionHandler: (MediaResult) -> Void
-        
-        func makeUIViewController(context: Context) -> PHPickerViewController {
-            var config = PHPickerConfiguration()
-            config.filter = .videos
-            config.selectionLimit = 0
-            switch mediaType {
-            case .images:
-                config.filter = .images
-            case .videos:
-                config.filter = .videos
-            }
-            config.selectionLimit = 0 // 0 means unlimited
-            let picker = PHPickerViewController(configuration: config)
-            picker.delegate = context.coordinator
-            return picker
-        }
-        
-        static func getDocumentsDirectory() -> URL {
-               let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-               return paths[0]
-           }
-        
-        func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
-        
-        func makeCoordinator() -> Coordinator {
-            Coordinator(self)
-        }
-        
-        final class Coordinator: NSObject, PHPickerViewControllerDelegate {
-            var parent: MediaPicker
-            
-            init(_ parent: MediaPicker) {
-                self.parent = parent
-            }
-            
-            func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-                switch parent.mediaType {
-                case .images:
-                    var selectedImages: [UIImage] = []
-                    for result in results {
-                        result.itemProvider.loadObject(ofClass: UIImage.self) { (object, error) in
-                            if let image = object as? UIImage {
-                                selectedImages.append(image)
-                            }
-                            if results.last == result {
-                                self.parent.completionHandler(.images(selectedImages))
-                            }
-                        }
-                    }
-                case .videos:
-                       var selectedVideos: [URL] = []
-                       let group = DispatchGroup()
-                       
-                    for result in results {
-                        group.enter()  // enter the group for each video result
-                        
-                        result.itemProvider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { (url, error) in
-                            if let videoURL = url {
-                                let newName = UUID().uuidString
-                                let newPath = self.saveVideo(videoURL: videoURL, name: newName)
-                                selectedVideos.append(newPath)
-                            }
-                            group.leave()  // leave the group after processing the video
-                        }
-                    }
-
-                       group.notify(queue: .main) {
-                           // Once all videos are processed, complete the picker action
-                           self.parent.completionHandler(.videos(selectedVideos))
-                           picker.dismiss(animated: true)
-                       }
-                   }
-               
-                
-                picker.dismiss(animated: true)
-            }
-            
-            private func saveVideo(videoURL: URL, name: String) -> URL {
-                let fileManager = FileManager.default
-                let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-                let newPath = documentsDirectory.appendingPathComponent(name + ".mov")
-
-                do {
-                    try fileManager.copyItem(at: videoURL, to: newPath)
-                } catch {
-                    print("Error copying video: \(error)")
-                }
-
-                return newPath
-            }
-        }
-    }
-}
-
     struct GalleryView_Previews: PreviewProvider {
         static var previews: some View {
             GalleryView()
         }
     }
+}
 
