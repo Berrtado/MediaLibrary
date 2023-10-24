@@ -25,8 +25,88 @@ extension MediaType {
     }
 }
 
+struct Album {
+    var name: String
+    var mediaItems: [String]
+}
+
+struct AlbumDetailView: View {
+    @Binding var album: Album
+    @State private var isPickerPresented = false
+    @State private var currentMediaType: MediaType = .images
+
+    var body: some View {
+        VStack {
+            List(album.mediaItems, id: \.self) { mediaItem in
+                if mediaItem.lowercased().hasSuffix(".jpg"), let image = loadImage(name: mediaItem) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                } else if mediaItem.lowercased().hasSuffix(".mov"), let videoURL = loadVideo(name: mediaItem) {
+                    VideoPlayer(player: AVPlayer(url: videoURL))
+                }
+            }
+            Button("Add Media") {
+                isPickerPresented = true
+            }
+            .sheet(isPresented: $isPickerPresented) {
+                MediaPicker(mediaType: currentMediaType) { result in
+                    handleMedia(result: result)
+                }
+            }
+        }
+        .navigationBarTitle(album.name)
+    }
+    
+    func handleMedia(result: MediaResult) {
+        PHPhotoLibrary.requestAuthorization { status in
+            if status == .authorized {
+                switch result {
+                case .images(let images):
+                    for image in images {
+                        let itemName = UUID().uuidString
+                        self.saveImage(image: image, name: itemName)
+                        if self.currentMediaType == .images {
+                            self.items.append(itemName + ".jpg")
+                        }
+                        self.loadItems()
+                    }
+                case .videos(let urls):
+                    for url in urls {
+                        let itemName = UUID().uuidString
+                        if self.currentMediaType == .videos {
+                            self.items.append(itemName + ".mov")
+                        }
+                        self.loadItems()
+                    }
+                }
+            } else {
+                print("Photo Library access denied.")
+            }
+        }
+    
+    switch result {
+           case .images(let images):
+               for image in images {
+                   let itemName = UUID().uuidString
+                   saveImage(image: image, name: itemName)
+                   album.mediaItems.append(itemName + ".jpg")
+               }
+           case .videos(let urls):
+               for url in urls {
+                   let itemName = UUID().uuidString
+                   album.mediaItems.append(itemName + ".mov")
+               }
+           }
+       }
+   }
 
 struct GalleryView: View {
+    
+    @State private var albums: [Album] = []
+    @State private var isCreatingAlbum = false
+    @State private var newAlbumName = ""
+
     @State private var selectedItems: Set<String> = []
     @State private var items: [String] = []
     @State private var isPickerPresented: Bool = false
@@ -124,6 +204,33 @@ struct GalleryView: View {
         NavigationView {
             VStack {
                 HStack {
+                    NavigationView {
+                        VStack {
+                            Button("Create New Album") {
+                                isCreatingAlbum = true
+                            }
+                            .sheet(isPresented: $isCreatingAlbum) {
+                                VStack {
+                                    TextField("Album Name", text: $newAlbumName)
+                                    Button("Create Album") {
+                                        let newAlbum = Album(name: newAlbumName, mediaItems: [])
+                                        albums.append(newAlbum)
+                                        isCreatingAlbum = false
+                                    }
+                                }
+                                .padding()
+                            }
+                            
+                            List(albums, id: \.name) { album in
+                                NavigationLink(destination: AlbumDetailView(album: album)) {
+                                    Text(album.name)
+                                }
+                            }
+                        }
+                        .navigationBarTitle("Albums")
+                    }
+
+                    
                     Button(action: {
                         viewingMediaType.toggle()
                         loadItems()
@@ -396,33 +503,6 @@ struct GalleryView: View {
         .padding(.bottom, 20) // Moved this inside
     }
     
-    func handleMedia(result: MediaResult) {
-        PHPhotoLibrary.requestAuthorization { status in
-            if status == .authorized {
-                switch result {
-                case .images(let images):
-                    for image in images {
-                        let itemName = UUID().uuidString
-                        self.saveImage(image: image, name: itemName)
-                        if self.currentMediaType == .images {
-                            self.items.append(itemName + ".jpg")
-                        }
-                        self.loadItems()
-                    }
-                case .videos(let urls):
-                    for url in urls {
-                        let itemName = UUID().uuidString
-                        if self.currentMediaType == .videos {
-                            self.items.append(itemName + ".mov")
-                        }
-                        self.loadItems()
-                    }
-                }
-            } else {
-                print("Photo Library access denied.")
-            }
-        }
-    }
     
     func loadImage(name: String) -> UIImage? {
         guard name.lowercased().hasSuffix(".jpg") else { return nil }
@@ -535,9 +615,9 @@ struct GalleryView: View {
     }
 }
 
-struct GalleryView_Previews: PreviewProvider {
-    static var previews: some View {
-        GalleryView()
+    struct GalleryView_Previews: PreviewProvider {
+        static var previews: some View {
+            GalleryView()
+        }
     }
-}
 
