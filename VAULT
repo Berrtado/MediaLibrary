@@ -203,6 +203,8 @@ struct GalleryView: View {
     @State private var albums: [Album] = []
     @State private var isCreatingAlbum = false
     @State private var newAlbumName = ""
+    @State private var currentAlbum: Album?
+
     
     @State private var selectedItems: Set<String> = []
     @State private var items: [String] = []
@@ -423,6 +425,49 @@ struct GalleryView: View {
         
     }
     
+    func handleMedia(result: MediaResult) {
+        guard var album = currentAlbum else {
+            print("No album selected.")
+            return
+        }
+
+        PHPhotoLibrary.requestAuthorization { status in
+            if status == .authorized {
+                switch result {
+                   case .images(let images):
+                       for image in images {
+                           let itemName = UUID().uuidString + ".jpg"
+                           saveImage(image: image, name: itemName)
+                           album.mediaItems.append(itemName)
+                       }
+                case .videos(let urls):
+                    for url in urls {
+                        let itemName = UUID().uuidString + ".mov"
+                        // Handle video saving here if needed
+                        album.mediaItems.append(itemName)
+                    }
+                }
+            } else {
+                print("Photo Library access denied.")
+            }
+        }
+    }
+
+    
+    func saveImage(image: UIImage, name: String) {
+        if let data = image.jpegData(compressionQuality: 1.0) {
+            let filename = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name).appendingPathExtension("jpg")
+            try? data.write(to: filename)
+        }
+    }
+       
+       func loadImage(name: String) -> UIImage? {
+           guard name.lowercased().hasSuffix(".jpg") else { return nil }
+           
+           let imagePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
+           return UIImage(contentsOfFile: imagePath.path)
+       }
+    
     private var albumSwitcher: some View {
         HStack {
             Spacer() // Add Spacer before Button to center it
@@ -610,4 +655,3 @@ struct GalleryView: View {
         }
     }
 }
-
