@@ -114,26 +114,27 @@ struct AlbumDetailView: View {
     func handleMedia(result: MediaResult) {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
+                var newMediaItems: [String] = album.mediaItems // Create a copy of the current media items
                 switch result {
                 case .images(let images):
                     for image in images {
                         let itemName = UUID().uuidString + ".jpg"
                         saveImage(image: image, name: itemName)
-                        album.mediaItems.append(itemName)
+                        newMediaItems.append(itemName)
                     }
                 case .videos(let urls):
                     for url in urls {
                         let itemName = UUID().uuidString + ".mov"
                         saveVideo(videoURL: url, name: itemName)
-                        album.mediaItems.append(itemName)
+                        newMediaItems.append(itemName)
                     }
                 }
+                album = Album(name: album.name, mediaItems: newMediaItems) // Update the entire album property
             } else {
                 print("Photo Library access denied.")
             }
         }
     }
-    
 
       func saveImage(image: UIImage, name: String) {
           if let data = image.jpegData(compressionQuality: 1.0) {
@@ -142,12 +143,12 @@ struct AlbumDetailView: View {
           }
       }
   }
-        func loadImage(name: String) -> UIImage? {
-              guard name.lowercased().hasSuffix(".jpg") else { return nil }
-            
-              let imagePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
-              return UIImage(contentsOfFile: imagePath.path)
-          }
+       // func loadImage(name: String) -> UIImage? {
+//      guard name.lowercased().hasSuffix(".jpg") else { return nil }
+//
+//       let imagePath = FileManager.default.urls(for: .documentDirectory, in: // .userDomainMask).first!.appendingPathComponent(name)
+//       return UIImage(contentsOfFile: imagePath.path)
+//     }
 
 struct MediaPicker: UIViewControllerRepresentable {
     var mediaType: MediaType
@@ -629,4 +630,3 @@ struct GalleryView: View {
         }
     }
 }
-
