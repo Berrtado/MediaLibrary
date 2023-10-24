@@ -25,7 +25,7 @@ extension MediaType {
     }
 }
 
-struct Album {
+struct Album: Codable {
     var name: String
     var mediaItems: [String]
 }
@@ -78,8 +78,10 @@ struct AlbumDetailView: View {
                 handleMedia(result: result)
             }
         }
+        
     }
     
+
     func handleMedia(result: MediaResult) {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
@@ -214,8 +216,9 @@ struct MediaPicker: UIViewControllerRepresentable {
 
 
 struct GalleryView: View {
-    
     @State private var albums: [Album] = []
+    
+    //@State private var albums: [Album] = []
     @State private var isCreatingAlbum = false
     @State private var newAlbumName = ""
     @State private var currentAlbum: Album?
@@ -228,8 +231,8 @@ struct GalleryView: View {
     @State private var viewingMediaType: MediaType = .images
     @State private var showDeleteConfirmation = false
     
-    var imageAlbums: [String: [String]] = [:]  // ["AlbumName": ["item1.jpg", "item2.jpg", ...]]
-    var videoAlbums: [String: [String]] = [:]  // ["AlbumName": ["item1.mov", "item2.mov", ...]]
+    //var imageAlbums: [String: [String]] = [:]  // ["AlbumName": ["item1.jpg", "item2.jpg", ...]]
+    //var videoAlbums: [String: [String]] = [:]  // ["AlbumName": ["item1.mov", "item2.mov", ...]]
     
     // To track the current album being viewed or modified
     @State private var currentImageAlbum: String?
@@ -326,6 +329,7 @@ struct GalleryView: View {
                            Button("Create Album") {
                                let newAlbum = Album(name: newAlbumName, mediaItems: [])
                                albums.append(newAlbum)
+                               saveAlbums(albums: albums)  // Pass the albums as an argument
                                isCreatingAlbum = false
                            }
                        }
@@ -341,7 +345,23 @@ struct GalleryView: View {
                .navigationBarTitle("Albums")
            }
        }
-   
+    
+    func saveAlbums(albums: [Album]) {
+           let encoder = JSONEncoder()
+           if let encoded = try? encoder.encode(albums) {
+               UserDefaults.standard.set(encoded, forKey: "SavedAlbums")
+           }
+       }
+
+       func loadAlbums() -> [Album] {
+           if let savedAlbums = UserDefaults.standard.object(forKey: "SavedAlbums") as? Data {
+               let decoder = JSONDecoder()
+               if let loadedAlbums = try? decoder.decode([Album].self, from: savedAlbums) {
+                   return loadedAlbums
+               }
+           }
+           return []
+       }
     
     func handleMedia(result: MediaResult) {
         guard var album = currentAlbum else {
@@ -574,4 +594,3 @@ struct GalleryView: View {
         }
     }
 }
-
