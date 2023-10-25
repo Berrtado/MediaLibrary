@@ -108,12 +108,18 @@ struct AlbumDetailView: View {
                 .padding(.bottom, 16)
             }
         }
-        .sheet(isPresented: $isMediaPickerPresented) {
-            MediaPicker(mediaType: selectedMediaType) { result in
-                handleMedia(result: result)
-            }
-        }
-    }
+        
+        .onChange(of: album.mediaItems) { newValue in
+                   DataManager.saveAlbums(albums: [album])
+            
+               }
+               .sheet(isPresented: $isMediaPickerPresented) {
+                   MediaPicker(mediaType: selectedMediaType) { result in
+                       handleMedia(result: result)
+                       DataManager.saveAlbums(albums: [album]) // Save album once after handling media
+                   }
+               }
+           }
     
     func saveVideo(videoURL: URL, name: String) {
         let destinationURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
@@ -413,6 +419,7 @@ struct GalleryView: View {
                        NavigationLink(destination: AlbumDetailView(album: album)) {
                            Text(album.name)
                        }
+                       .id(UUID())
                    }
                }
                .navigationBarTitle("Albums")
