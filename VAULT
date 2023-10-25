@@ -37,9 +37,15 @@ func getDocumentsDirectory() -> URL {
 
 struct DataManager {
     static func saveAlbums(albums: [Album]) {
+        print("Raw data before saving: \(UserDefaults.standard.data(forKey: "SavedAlbums") ?? Data())")
         let encoder = JSONEncoder()
         if let encoded = try? encoder.encode(albums) {
             UserDefaults.standard.set(encoded, forKey: "SavedAlbums")
+            UserDefaults.standard.synchronize() // Force UserDefaults to save
+            
+            let savedAlbums = loadAlbums()
+            print("Verified saved albums: \(savedAlbums)")
+            print("Raw data after saving: \(UserDefaults.standard.data(forKey: "SavedAlbums") ?? Data())")
         }
     }
 
@@ -53,7 +59,6 @@ struct DataManager {
         return []
     }
 }
-
 
 struct AlbumDetailView: View {
     @State var album: Album
@@ -110,30 +115,32 @@ struct AlbumDetailView: View {
         }
     }
     
-    // All utility functions should be here, outside the body but inside the struct
-    
-    func loadImage(name: String) -> UIImage? {
-        let path = getDocumentsDirectory().appendingPathComponent(name)
-        print("Trying to load image from path: \(path)") // Debugging print statement
-        if let data = try? Data(contentsOf: path) {
-            print("Successfully loaded image: \(name)") // Debugging print statement
-            return UIImage(data: data)
-        } else {
-            print("Failed to load image: \(name)") // Debugging print statement
-            return nil
-        }
-    }
-    
     func saveVideo(videoURL: URL, name: String) {
         let destinationURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
         try? FileManager.default.copyItem(at: videoURL, to: destinationURL)
     }
     
+    func loadImage(name: String) -> UIImage? {
+        let path = getDocumentsDirectory().appendingPathComponent(name)
+        print("Trying to load image from path: \(path)")
+        if let data = try? Data(contentsOf: path) {
+            print("Successfully loaded image: \(name)")
+            return UIImage(data: data)
+        } else {
+            print("Failed to load image: \(name)")
+            return nil
+        }
+    }
+    
+    // func applicationDidEnterBackground(_ application: UIApplication) {
+    //    DataManager.saveAlbums(albums: allAlbums) // Assuming allAlbums is accessible here
+    // }
     
     
     func handleMedia(result: MediaResult) {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
+                print("Received media result: \(result)")
                 var newMediaItems: [String] = album.mediaItems
                 switch result {
                 case .images(let images):
@@ -149,13 +156,19 @@ struct AlbumDetailView: View {
                         newMediaItems.append(itemName)
                     }
                 }
+                print("Current album's media items: \(album.mediaItems)")
                 album = Album(name: album.name, mediaItems: newMediaItems)
+                print("New media items: \(newMediaItems)")
                 
                 // Save the updated album data using DataManager
                 var allAlbums = DataManager.loadAlbums()
                 if let index = allAlbums.firstIndex(where: { $0.name == album.name }) {
                     allAlbums[index] = album
                     DataManager.saveAlbums(albums: allAlbums)
+                    let updatedAlbum = DataManager.loadAlbums().first(where: { $0.name == album.name })
+                    print("Updated album's media items: \(updatedAlbum?.mediaItems ?? [])")
+
+
                 }
             } else {
                 print("Photo Library access denied.")
@@ -163,14 +176,15 @@ struct AlbumDetailView: View {
         }
     }
 
-
-      func saveImage(image: UIImage, name: String) {
-          if let data = image.jpegData(compressionQuality: 1.0) {
-              let filename = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
-              try? data.write(to: filename)
-          }
-      }
-  }
+    
+    func saveImage(image: UIImage, name: String) {
+        if let data = image.jpegData(compressionQuality: 1.0) {
+            let filename = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
+            try? data.write(to: filename)
+            print("Image saved at: \(filename)")
+        }
+    }
+}
        // func loadImage(name: String) -> UIImage? {
 //      guard name.lowercased().hasSuffix(".jpg") else { return nil }
 //
@@ -448,18 +462,26 @@ struct GalleryView: View {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
                 switch result {
-                   case .images(let images):
-                       for image in images {
-                           let itemName = UUID().uuidString + ".jpg"
-                           saveImage(image: image, name: itemName)
-                           album.mediaItems.append(itemName)
-                       }
+                case .images(let images):
+                    for image in images {
+                        let itemName = UUID().uuidString + ".jpg"
+                        saveImage(image: image, name: itemName)
+                        album.mediaItems.append(itemName)
+                    }
                 case .videos(let urls):
                     for url in urls {
                         let itemName = UUID().uuidString + ".mov"
                         // Handle video saving here if needed
                         album.mediaItems.append(itemName)
                     }
+                }
+                var allAlbums = DataManager.loadAlbums()
+                if let index = allAlbums.firstIndex(where: { $0.name == album.name }) {
+                    allAlbums[index] = album
+                    DataManager.saveAlbums(albums: allAlbums)
+                    let updatedAlbum = DataManager.loadAlbums().first(where: { $0.name == album.name })
+                    print("Updated album's media items: \(updatedAlbum?.mediaItems ?? [])")
+
                 }
             } else {
                 print("Photo Library access denied.")
