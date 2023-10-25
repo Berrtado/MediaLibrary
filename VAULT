@@ -25,10 +25,32 @@ extension MediaType {
     }
 }
 
-struct Album: Codable {
+class Album: ObservableObject, Codable {
     var name: String
-    var mediaItems: [String]
+    @Published var mediaItems: [String]
+
+    enum CodingKeys: CodingKey {
+        case name, mediaItems
+    }
+
+    init(name: String, mediaItems: [String]) {
+        self.name = name
+        self.mediaItems = mediaItems
+    }
+
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        mediaItems = try container.decode([String].self, forKey: .mediaItems)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(mediaItems, forKey: .mediaItems)
+    }
 }
+
 
 func getDocumentsDirectory() -> URL {
     let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
@@ -37,20 +59,15 @@ func getDocumentsDirectory() -> URL {
 
 struct DataManager {
     static func saveAlbums(albums: [Album]) {
-        print("Raw data before saving: \(UserDefaults.standard.data(forKey: "SavedAlbums") ?? Data())")
         let encoder = JSONEncoder()
         if let encoded = try? encoder.encode(albums) {
             UserDefaults.standard.set(encoded, forKey: "SavedAlbums")
-            UserDefaults.standard.synchronize() // Force UserDefaults to save
-            
-            let savedAlbums = loadAlbums()
-            print("Verified saved albums: \(savedAlbums)")
-            print("Raw data after saving: \(UserDefaults.standard.data(forKey: "SavedAlbums") ?? Data())")
+            UserDefaults.standard.synchronize()
         }
     }
 
     static func loadAlbums() -> [Album] {
-        if let savedAlbums = UserDefaults.standard.object(forKey: "SavedAlbums") as? Data {
+        if let savedAlbums = UserDefaults.standard.data(forKey: "SavedAlbums") {
             let decoder = JSONDecoder()
             if let loadedAlbums = try? decoder.decode([Album].self, from: savedAlbums) {
                 return loadedAlbums
@@ -60,20 +77,18 @@ struct DataManager {
     }
 }
 
+
 struct AlbumDetailView: View {
-    @State var album: Album
+    @ObservedObject var album: Album
     @State private var isMediaPickerPresented: Bool = false
     @State private var selectedMediaType: MediaType = .images
     let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4) // 4 column-based view
     
     var body: some View {
         VStack {
-            // Display the album name
             Text(album.name)
                 .font(.largeTitle)
                 .padding()
-            
-            // Display the media items in a 4-column grid
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(album.mediaItems, id: \.self) { mediaItem in
@@ -87,8 +102,7 @@ struct AlbumDetailView: View {
                             EmptyView()
                         }
                     }
-                    
-                } // Closing brace for LazyVGrid
+                }
             }
             
             // Button to add new media to the album
@@ -110,16 +124,18 @@ struct AlbumDetailView: View {
         }
         
         .onChange(of: album.mediaItems) { newValue in
-                   DataManager.saveAlbums(albums: [album])
-            
-               }
-               .sheet(isPresented: $isMediaPickerPresented) {
-                   MediaPicker(mediaType: selectedMediaType) { result in
-                       handleMedia(result: result)
-                       DataManager.saveAlbums(albums: [album]) // Save album once after handling media
-                   }
-               }
-           }
+            DataManager.saveAlbums(albums: [album])
+            album.mediaItems = newValue
+        }
+
+        .sheet(isPresented: $isMediaPickerPresented) {
+            MediaPicker(mediaType: selectedMediaType) { result in
+                handleMedia(result: result)
+                DataManager.saveAlbums(albums: [album]) // Save album once after handling media
+            }
+        }
+    }
+
     
     func saveVideo(videoURL: URL, name: String) {
         let destinationURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
@@ -142,7 +158,6 @@ struct AlbumDetailView: View {
     //    DataManager.saveAlbums(albums: allAlbums) // Assuming allAlbums is accessible here
     // }
     
-    
     func handleMedia(result: MediaResult) {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
@@ -163,8 +178,10 @@ struct AlbumDetailView: View {
                     }
                 }
                 print("Current album's media items: \(album.mediaItems)")
-                album = Album(name: album.name, mediaItems: newMediaItems)
-                print("New media items: \(newMediaItems)")
+                
+                DispatchQueue.main.async {
+                    album.mediaItems = newMediaItems
+                }
                 
                 // Save the updated album data using DataManager
                 var allAlbums = DataManager.loadAlbums()
@@ -173,15 +190,12 @@ struct AlbumDetailView: View {
                     DataManager.saveAlbums(albums: allAlbums)
                     let updatedAlbum = DataManager.loadAlbums().first(where: { $0.name == album.name })
                     print("Updated album's media items: \(updatedAlbum?.mediaItems ?? [])")
-
-
                 }
             } else {
                 print("Photo Library access denied.")
             }
         }
     }
-
     
     func saveImage(image: UIImage, name: String) {
         if let data = image.jpegData(compressionQuality: 1.0) {
@@ -699,3 +713,4 @@ struct GalleryView: View {
         }
     }
 }
+
