@@ -35,19 +35,39 @@ func getDocumentsDirectory() -> URL {
     return paths[0]
 }
 
+struct DataManager {
+    static func saveAlbums(albums: [Album]) {
+        let encoder = JSONEncoder()
+        if let encoded = try? encoder.encode(albums) {
+            UserDefaults.standard.set(encoded, forKey: "SavedAlbums")
+        }
+    }
+
+    static func loadAlbums() -> [Album] {
+        if let savedAlbums = UserDefaults.standard.object(forKey: "SavedAlbums") as? Data {
+            let decoder = JSONDecoder()
+            if let loadedAlbums = try? decoder.decode([Album].self, from: savedAlbums) {
+                return loadedAlbums
+            }
+        }
+        return []
+    }
+}
+
+
 struct AlbumDetailView: View {
     @State var album: Album
     @State private var isMediaPickerPresented: Bool = false
     @State private var selectedMediaType: MediaType = .images
     let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4) // 4 column-based view
-
+    
     var body: some View {
         VStack {
             // Display the album name
             Text(album.name)
                 .font(.largeTitle)
                 .padding()
-
+            
             // Display the media items in a 4-column grid
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 16) {
@@ -62,10 +82,10 @@ struct AlbumDetailView: View {
                             EmptyView()
                         }
                     }
-
+                    
                 } // Closing brace for LazyVGrid
             }
-
+            
             // Button to add new media to the album
             Button(action: {
                 isMediaPickerPresented.toggle()
@@ -89,9 +109,9 @@ struct AlbumDetailView: View {
             }
         }
     }
-
+    
     // All utility functions should be here, outside the body but inside the struct
-
+    
     func loadImage(name: String) -> UIImage? {
         let path = getDocumentsDirectory().appendingPathComponent(name)
         print("Trying to load image from path: \(path)") // Debugging print statement
@@ -104,17 +124,17 @@ struct AlbumDetailView: View {
         }
     }
     
-        func saveVideo(videoURL: URL, name: String) {
-            let destinationURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
-            try? FileManager.default.copyItem(at: videoURL, to: destinationURL)
-        }
-
+    func saveVideo(videoURL: URL, name: String) {
+        let destinationURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
+        try? FileManager.default.copyItem(at: videoURL, to: destinationURL)
+    }
     
-
+    
+    
     func handleMedia(result: MediaResult) {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
-                var newMediaItems: [String] = album.mediaItems // Create a copy of the current media items
+                var newMediaItems: [String] = album.mediaItems
                 switch result {
                 case .images(let images):
                     for image in images {
@@ -129,12 +149,20 @@ struct AlbumDetailView: View {
                         newMediaItems.append(itemName)
                     }
                 }
-                album = Album(name: album.name, mediaItems: newMediaItems) // Update the entire album property
+                album = Album(name: album.name, mediaItems: newMediaItems)
+                
+                // Save the updated album data using DataManager
+                var allAlbums = DataManager.loadAlbums()
+                if let index = allAlbums.firstIndex(where: { $0.name == album.name }) {
+                    allAlbums[index] = album
+                    DataManager.saveAlbums(albums: allAlbums)
+                }
             } else {
                 print("Photo Library access denied.")
             }
         }
     }
+
 
       func saveImage(image: UIImage, name: String) {
           if let data = image.jpegData(compressionQuality: 1.0) {
@@ -374,8 +402,11 @@ struct GalleryView: View {
                    }
                }
                .navigationBarTitle("Albums")
+               
                .onAppear {
-                          self.albums = loadAlbums()
+                   DispatchQueue.main.async {
+                       self.albums = loadAlbums()
+                   }
                       }
            }
        }
@@ -383,21 +414,30 @@ struct GalleryView: View {
        
     
     func saveAlbums(albums: [Album]) {
-           let encoder = JSONEncoder()
-           if let encoded = try? encoder.encode(albums) {
-               UserDefaults.standard.set(encoded, forKey: "SavedAlbums")
-           }
-       }
+        do {
+            let data = try JSONEncoder().encode(albums)
+            UserDefaults.standard.set(data, forKey: "albums")
+            print("Successfully saved albums to UserDefaults.")
+        } catch {
+            print("Error saving albums to UserDefaults: \(error.localizedDescription)")
+        }
+    }
 
-       func loadAlbums() -> [Album] {
-           if let savedAlbums = UserDefaults.standard.object(forKey: "SavedAlbums") as? Data {
-               let decoder = JSONDecoder()
-               if let loadedAlbums = try? decoder.decode([Album].self, from: savedAlbums) {
-                   return loadedAlbums
-               }
-           }
-           return []
-       }
+    func loadAlbums() -> [Album] {
+        if let data = UserDefaults.standard.data(forKey: "albums") {
+            do {
+                let albums = try JSONDecoder().decode([Album].self, from: data)
+                print("Successfully loaded albums from UserDefaults.")
+                return albums
+            } catch {
+                print("Error decoding albums from UserDefaults: \(error.localizedDescription)")
+                return []
+            }
+        } else {
+            print("No albums found in UserDefaults.")
+            return []
+        }
+    }
     
     func handleMedia(result: MediaResult) {
         guard var album = currentAlbum else {
