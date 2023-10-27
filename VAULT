@@ -2,6 +2,7 @@ import SwiftUI
 import AVKit
 import Photos
 import PhotosUI
+import KeychainSwift
 import AVFoundation
 
 enum MediaResult {
@@ -57,28 +58,30 @@ func getDocumentsDirectory() -> URL {
     return paths[0]
 }
 
-struct DataManager {
-    static func saveAlbums(albums: [Album]) {
+class DataManager {
+    let keychain = KeychainSwift()
+
+    func saveAlbums(albums: [Album]) {
         let encoder = JSONEncoder()
         if let encoded = try? encoder.encode(albums) {
-            UserDefaults.standard.set(encoded, forKey: "SavedAlbums")
-            UserDefaults.standard.synchronize()
+            keychain.set(encoded, forKey: "SavedAlbums")
         }
     }
 
-    static func loadAlbums() -> [Album] {
-        if let savedAlbums = UserDefaults.standard.data(forKey: "SavedAlbums") {
-            let decoder = JSONDecoder()
-            if let loadedAlbums = try? decoder.decode([Album].self, from: savedAlbums) {
-                return loadedAlbums
-            }
+    func loadAlbums() -> [Album] {
+        let decoder = JSONDecoder()
+        if let savedAlbums = keychain.getData("SavedAlbums"),
+           let loadedAlbums = try? decoder.decode([Album].self, from: savedAlbums) {
+            return loadedAlbums
         }
         return []
     }
 }
 
-
 struct AlbumDetailView: View {
+    let dataManager = DataManager()
+    
+
     @ObservedObject var album: Album
     @State private var isMediaPickerPresented: Bool = false
     @State private var selectedMediaType: MediaType = .images
@@ -124,14 +127,14 @@ struct AlbumDetailView: View {
         }
         
         .onChange(of: album.mediaItems) { newValue in
-            DataManager.saveAlbums(albums: [album])
+            dataManager.saveAlbums(albums: [album])
             album.mediaItems = newValue
         }
 
         .sheet(isPresented: $isMediaPickerPresented) {
             MediaPicker(mediaType: selectedMediaType) { result in
                 handleMedia(result: result)
-                DataManager.saveAlbums(albums: [album]) // Save album once after handling media
+                dataManager.saveAlbums(albums: [album]) // Save album once after handling media
             }
         }
     }
@@ -181,11 +184,12 @@ struct AlbumDetailView: View {
                 }
                 
                 // Save the updated album data using DataManager
-                var allAlbums = DataManager.loadAlbums()
+                var allAlbums = dataManager.loadAlbums()
+
                 if let index = allAlbums.firstIndex(where: { $0.name == album.name }) {
                     allAlbums[index] = album
-                    DataManager.saveAlbums(albums: allAlbums)
-                    let updatedAlbum = DataManager.loadAlbums().first(where: { $0.name == album.name })
+                    dataManager.saveAlbums(albums: allAlbums)
+                    let updatedAlbum = dataManager.loadAlbums().first(where: { $0.name == album.name })
                     print("Updated album's media items: \(updatedAlbum?.mediaItems ?? [])")
                 }
             } else {
@@ -305,14 +309,14 @@ struct MediaPicker: UIViewControllerRepresentable {
 
 
 struct GalleryView: View {
+    
+    
     @State private var albums: [Album] = []
-    
-    
-    //@State private var albums: [Album] = []
     @State private var isCreatingAlbum = false
     @State private var newAlbumName = ""
     @State private var currentAlbum: Album?
     
+    let dataManager = DataManager()
     
     @State private var selectedItems: Set<String> = []
     @State private var items: [String] = []
@@ -450,12 +454,10 @@ struct GalleryView: View {
             .font(.custom("Futura-Bold", size: 15))
             
             .onAppear {
-                DispatchQueue.main.async {
-                    self.albums = loadAlbums()
-                }
-            }
-        }
-    }
+                       self.albums = dataManager.loadAlbums()
+                   }
+               }
+           }
     
     
     
@@ -507,11 +509,12 @@ struct GalleryView: View {
                         album.mediaItems.append(itemName)
                     }
                 }
-                var allAlbums = DataManager.loadAlbums()
+                var allAlbums = dataManager.loadAlbums()
+
                 if let index = allAlbums.firstIndex(where: { $0.name == album.name }) {
                     allAlbums[index] = album
-                    DataManager.saveAlbums(albums: allAlbums)
-                    let updatedAlbum = DataManager.loadAlbums().first(where: { $0.name == album.name })
+                    dataManager.saveAlbums(albums: allAlbums)
+                    let updatedAlbum = dataManager.loadAlbums().first(where: { $0.name == album.name })
                     print("Updated album's media items: \(updatedAlbum?.mediaItems ?? [])")
                 }
             } else {
@@ -521,17 +524,6 @@ struct GalleryView: View {
         currentAlbum = album
     }
 
-   // func saveVideo(videoURL: URL, name: String) {
-    //      let destinationPath = getDocumentsDirectory().appendingPathComponent(name)
-    //      do {
-    //         try FileManager.default.copyItem(at: videoURL, to: destinationPath)
-    //         print("Video saved at: \(destinationPath)")
-    // //     } catch {
-    //        print("Error saving video: \(error.localizedDescription)")
-    //     }
-    //   }
-
-    
     func saveImage(image: UIImage, name: String) {
         if let data = image.jpegData(compressionQuality: 1.0) {
             let filename = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name).appendingPathExtension("jpg")
@@ -662,23 +654,8 @@ struct GalleryView: View {
                             Label("Save to Camera Roll", systemImage: "square.and.arrow.down")
                         }
                         
-                        // Button(action: {
-                        //     deleteItem(name: item)
-                        // }) {
-                        //     Label("Delete", systemImage: "trash")
-                        // }
+                       
                     }
-                //  .onTapGesture {
-                //   if showDeleteConfirmation {
-                //        if isSelected {
-                //            selectedItems.remove(item)
-                // //         } else {
-                                //            selectedItems.insert(item)
-                //           }
-                //       } else {
-                //            // Handle tapping on the video when not in select items mode
-                //        }
-                //     }
             }
         }
     }
