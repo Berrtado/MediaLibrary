@@ -78,15 +78,8 @@ class DataManager {
     }
 }
 
-
-
 struct AlbumDetailView: View {
-    
-    
     let dataManager = DataManager()
-    
-    @State private var selectedItems: Set<String> = []
-    @State private var isSelectionMode: Bool = false
 
     @ObservedObject var album: Album
     @State private var isMediaPickerPresented: Bool = false
@@ -94,27 +87,6 @@ struct AlbumDetailView: View {
     let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4) // 4 column-based view
     
     var body: some View {
-        HStack {
-            Button(action: {
-                // Handle save to camera roll action
-                saveSelectedItemsToCameraRoll()
-            }) {
-                Image(systemName: "square.and.arrow.down")
-            }
-            .disabled(!isSelectionMode || selectedItems.isEmpty)
-            
-            Spacer()
-            
-            Button(action: {
-                // Handle delete action
-                deleteSelectedItems()
-            }) {
-                Image(systemName: "trash")
-            }
-            .disabled(!isSelectionMode || selectedItems.isEmpty)
-        }
-        .padding()
-        
         VStack {
             Text(album.name)
                 .font(.largeTitle)
@@ -126,81 +98,46 @@ struct AlbumDetailView: View {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFit()
-                                .overlay(
-                                    Image(systemName: selectedItems.contains(mediaItem) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(.blue)
-                                )
-                                .onTapGesture {
-                                    if isSelectionMode {
-                                        if selectedItems.contains(mediaItem) {
-                                            selectedItems.remove(mediaItem)
-                                        } else {
-                                            selectedItems.insert(mediaItem)
-                                        }
-                                    }
-                                }
-                                .onLongPressGesture {
-                                    isSelectionMode.toggle()
-                                }
+                        } else if mediaItem.hasSuffix(".mov") {
+                            Text("Video Placeholder")
+                        } else {
+                            EmptyView()
                         }
-                        
                     }
                 }
-                
-                // Button to add new media to the album
-                Button(action: {
-                    isMediaPickerPresented.toggle()
-                }) {
-                    HStack {
-                        Image(systemName: selectedMediaType == .images ? "photo" : "video")
-                        Text(selectedMediaType == .images ? "Insert Images" : "Insert Videos")
-                    }
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 15)
-                    .background(Color.black)
-                    .foregroundColor(.white)
-                    .cornerRadius(20)
-                    .shadow(color: .gray, radius: 3, x: 1, y: 1)
-                    .padding(.bottom, 16)
+            }
+            
+            // Button to add new media to the album
+            Button(action: {
+                isMediaPickerPresented.toggle()
+            }) {
+                HStack {
+                    Image(systemName: selectedMediaType == .images ? "photo" : "video")
+                    Text(selectedMediaType == .images ? "Insert Images" : "Insert Videos")
                 }
+                .padding(.horizontal, 30)
+                .padding(.vertical, 15)
+                .background(Color.black)
+                .foregroundColor(.white)
+                .cornerRadius(20)
+                .shadow(color: .gray, radius: 3, x: 1, y: 1)
+                .padding(.bottom, 16)
             }
-            
-            .onChange(of: album.mediaItems) { newValue in
-                dataManager.saveAlbums(albums: [album])
-                album.mediaItems = newValue
-            }
-            
-            .sheet(isPresented: $isMediaPickerPresented) {
-                MediaPicker(mediaType: selectedMediaType) { result in
-                    handleMedia(result: result)
-                    dataManager.saveAlbums(albums: [album]) // Save album once after handling media
-                }
-            }
-            
         }
         
-        func saveSelectedItemsToCameraRoll() {
-            for item in selectedItems {
-                if item.hasSuffix(".jpg"), let image = loadImage(name: item) {
-                    UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-                } else if item.hasSuffix(".mov"), let videoURL = loadVideo(name: item) {
-                    UISaveVideoAtPathToSavedPhotosAlbum(videoURL.path, nil, nil, nil)
-                }
-            }
-            selectedItems.removeAll()
-            isSelectionMode = false
+        .onChange(of: album.mediaItems) { newValue in
+            dataManager.saveAlbums(albums: [album])
+            album.mediaItems = newValue
         }
-        
-        func deleteSelectedItems() {
-            for item in selectedItems {
-                if let index = album.mediaItems.firstIndex(of: item) {
-                    album.mediaItems.remove(at: index)
-                }
+
+        .sheet(isPresented: $isMediaPickerPresented) {
+            MediaPicker(mediaType: selectedMediaType) { result in
+                handleMedia(result: result)
+                dataManager.saveAlbums(albums: [album]) // Save album once after handling media
             }
-            selectedItems.removeAll()
-            isSelectionMode = false
         }
     }
+
     
     func saveVideo(videoURL: URL, name: String) {
         let destinationURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
@@ -768,3 +705,4 @@ struct GalleryView: View {
         }
     }
 }
+
