@@ -80,6 +80,8 @@ class DataManager {
 
 struct AlbumDetailView: View {
     let dataManager = DataManager()
+    
+    @State private var isInDeletionMode: Bool = false
 
     @ObservedObject var album: Album
     @State private var isMediaPickerPresented: Bool = false
@@ -87,25 +89,48 @@ struct AlbumDetailView: View {
     let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4) // 4 column-based view
     
     var body: some View {
-        VStack {
-            Text(album.name)
-                .font(.largeTitle)
-                .padding()
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(album.mediaItems, id: \.self) { mediaItem in
+           VStack {
+               
+               Text(album.name)
+                   .font(.largeTitle)
+                   .padding()
+               ScrollView {
+                   LazyVGrid(columns: columns, spacing: 16) {
+                       ForEach(album.mediaItems, id: \.self) { mediaItem in
                         if mediaItem.hasSuffix(".jpg"), let image = loadImage(name: mediaItem) {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFit()
+                                .overlay(
+                                       Image(systemName: "xmark.circle")
+                                           .foregroundColor(.red)
+                                           .font(.system(size: 50, weight: .bold))
+                                           .opacity(isInDeletionMode ? 1 : 0)
+                                   )
+                                .onTapGesture {
+                                    if isInDeletionMode {
+                                        if let index = album.mediaItems.firstIndex(of: mediaItem) {
+                                            album.mediaItems.remove(at: index)
+                                        }
+                                    }
+                                }
+                                .navigationBarItems(trailing: Button(action: {
+                                    isInDeletionMode.toggle()
+                                }) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(10)
+                                        .background(Color.black)
+                                        .cornerRadius(15)
+                                        .shadow(color: .gray, radius: 4, x: 1, y: 1)
+                                })
                         } else if mediaItem.hasSuffix(".mov") {
                             Text("Video Placeholder")
-                        } else {
-                            EmptyView()
-                        }
-                    }
                 }
             }
+        }
+    }
             
             // Button to add new media to the album
             Button(action: {
@@ -308,8 +333,7 @@ struct MediaPicker: UIViewControllerRepresentable {
 
 
 struct GalleryView: View {
-    
-    
+
     @State private var albums: [Album] = []
     @State private var isCreatingAlbum = false
     @State private var newAlbumName = ""
@@ -705,4 +729,3 @@ struct GalleryView: View {
         }
     }
 }
-
