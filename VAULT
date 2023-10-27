@@ -144,15 +144,12 @@ struct AlbumDetailView: View {
     
     func loadImage(name: String) -> UIImage? {
         let path = getDocumentsDirectory().appendingPathComponent(name)
-        print("Trying to load image from path: \(path)")
         if let data = try? Data(contentsOf: path) {
-            print("Successfully loaded image: \(name)")
             return UIImage(data: data)
-        } else {
-            print("Failed to load image: \(name)")
-            return nil
         }
+        return nil
     }
+
     
     // func applicationDidEnterBackground(_ application: UIApplication) {
     //    DataManager.saveAlbums(albums: allAlbums) // Assuming allAlbums is accessible here
@@ -205,12 +202,12 @@ struct AlbumDetailView: View {
         }
     }
 }
-       // func loadImage(name: String) -> UIImage? {
-//      guard name.lowercased().hasSuffix(".jpg") else { return nil }
-//
-//       let imagePath = FileManager.default.urls(for: .documentDirectory, in: // .userDomainMask).first!.appendingPathComponent(name)
-//       return UIImage(contentsOfFile: imagePath.path)
-//     }
+//     func loadImage(name: String) -> UIImage? {
+            //   guard name.lowercased().hasSuffix(".jpg") else { return nil }
+
+            //    let imagePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
+            //     return UIImage(contentsOfFile: imagePath.path)
+ //    }
 
 struct MediaPicker: UIViewControllerRepresentable {
     var mediaType: MediaType
@@ -286,12 +283,12 @@ struct MediaPicker: UIViewControllerRepresentable {
                    }
                }
            
-            
             picker.dismiss(animated: true)
         }
         
         private func saveVideo(videoURL: URL, name: String) -> URL {
             let fileManager = FileManager.default
+            
             let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
             let newPath = documentsDirectory.appendingPathComponent(name + ".mov")
 
@@ -309,13 +306,13 @@ struct MediaPicker: UIViewControllerRepresentable {
 
 struct GalleryView: View {
     @State private var albums: [Album] = []
-
-
+    
+    
     //@State private var albums: [Album] = []
     @State private var isCreatingAlbum = false
     @State private var newAlbumName = ""
     @State private var currentAlbum: Album?
-
+    
     
     @State private var selectedItems: Set<String> = []
     @State private var items: [String] = []
@@ -362,16 +359,16 @@ struct GalleryView: View {
         }
     }
     
-    func deleteItem(name: String) {
-        let documentDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let filePath = documentDirectory.appendingPathComponent(name)
-        do {
-            try fileManager.removeItem(at: filePath)
-            items.removeAll { $0 == name }
-        } catch {
-            print("Error deleting item: \(error)")
-        }
-    }
+    // func deleteItem(name: String) {
+    //    let documentDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+    //    let filePath = documentDirectory.appendingPathComponent(name)
+    //   do {
+    //       try fileManager.removeItem(at: filePath)
+    //        items.removeAll { $0 == name }
+    //     } catch {
+    //         print("Error deleting item: \(error)")
+    //     }
+    //  }
     
     func loadItems() {
         let documentDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -411,42 +408,56 @@ struct GalleryView: View {
     
     
     var body: some View {
-           NavigationView {
-               VStack {
-                   Button("Create New Album") {
-                       isCreatingAlbum = true
-                   }
-                   .sheet(isPresented: $isCreatingAlbum) {
-                       VStack {
-                           TextField("Album Name", text: $newAlbumName)
-                           Button("Create Album") {
-                               let newAlbum = Album(name: newAlbumName, mediaItems: [])
-                               albums.append(newAlbum)
-                               saveAlbums(albums: albums)
-                               isCreatingAlbum = false
-                           }
-                       }
-                       .padding()
-                   }
-                   
-                   List(albums, id: \.name) { album in
-                       NavigationLink(destination: AlbumDetailView(album: album)) {
-                           Text(album.name)
-                       }
-                       .id(UUID())
-                   }
-               }
-               .navigationBarTitle("Albums")
-               
-               .onAppear {
-                   DispatchQueue.main.async {
-                       self.albums = loadAlbums()
-                   }
-                      }
-           }
-       }
+        NavigationView {
+            VStack {
+                Button("Create New Album") {
+                    isCreatingAlbum = true
+                }
+                .padding()
+                .font(.custom("Futura-Bold", size: 13))
+                .foregroundColor(.white)
+                .background(Color.black)
+                .cornerRadius(10)
+                .sheet(isPresented: $isCreatingAlbum) {
+                    HStack {
+                        TextField("Album Name", text: $newAlbumName)
+                        Button("Create Album") {
+                            let newAlbum = Album(name: newAlbumName, mediaItems: [])
+                            albums.append(newAlbum)
+                            saveAlbums(albums: albums)
+                            isCreatingAlbum = false
+                        }
+                        .padding()
+                        .font(.custom("Futura-Bold", size: 13))
+                        .foregroundColor(.white)
+                        .background(Color.black)
+                        .cornerRadius(10)
+                    }
+                    .padding()
+                  
+                    
+                }
+                
+                List(albums, id: \.name) { album in
+                    NavigationLink(destination: AlbumDetailView(album: album)) {
+                        Text(album.name)
+                    }
+                    .id(UUID())
+                }
+            }
+            .navigationBarTitle("Albums")
+            //.padding()
+            .font(.custom("Futura-Bold", size: 15))
+            
+            .onAppear {
+                DispatchQueue.main.async {
+                    self.albums = loadAlbums()
+                }
+            }
+        }
+    }
     
-       
+    
     
     func saveAlbums(albums: [Album]) {
         do {
@@ -457,7 +468,7 @@ struct GalleryView: View {
             print("Error saving albums to UserDefaults: \(error.localizedDescription)")
         }
     }
-
+    
     func loadAlbums() -> [Album] {
         if let data = UserDefaults.standard.data(forKey: "albums") {
             do {
@@ -479,7 +490,7 @@ struct GalleryView: View {
             print("No album selected.")
             return
         }
-
+        
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
                 switch result {
@@ -492,7 +503,7 @@ struct GalleryView: View {
                 case .videos(let urls):
                     for url in urls {
                         let itemName = UUID().uuidString + ".mov"
-                        // Handle video saving here if needed
+                        saveVideo(videoURL: url, name: itemName)
                         album.mediaItems.append(itemName)
                     }
                 }
@@ -502,7 +513,6 @@ struct GalleryView: View {
                     DataManager.saveAlbums(albums: allAlbums)
                     let updatedAlbum = DataManager.loadAlbums().first(where: { $0.name == album.name })
                     print("Updated album's media items: \(updatedAlbum?.mediaItems ?? [])")
-
                 }
             } else {
                 print("Photo Library access denied.")
@@ -510,6 +520,16 @@ struct GalleryView: View {
         }
         currentAlbum = album
     }
+
+   // func saveVideo(videoURL: URL, name: String) {
+    //      let destinationPath = getDocumentsDirectory().appendingPathComponent(name)
+    //      do {
+    //         try FileManager.default.copyItem(at: videoURL, to: destinationPath)
+    //         print("Video saved at: \(destinationPath)")
+    // //     } catch {
+    //        print("Error saving video: \(error.localizedDescription)")
+    //     }
+    //   }
 
     
     func saveImage(image: UIImage, name: String) {
@@ -608,12 +628,12 @@ struct GalleryView: View {
                         Label("Save to Camera Roll", systemImage: "square.and.arrow.down")
                     }
                     
-                    Button(action: {
-                        deleteItem(name: item)
-                    }) {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
+                    //   Button(action: {
+                    //      deleteItem(name: item)
+                    //   }) {
+                    //        Label("Delete", systemImage: "trash")
+                    //    }
+                       }
                 .onTapGesture {
                     if showDeleteConfirmation {
                         if isSelected {
@@ -642,23 +662,23 @@ struct GalleryView: View {
                             Label("Save to Camera Roll", systemImage: "square.and.arrow.down")
                         }
                         
-                        Button(action: {
-                            deleteItem(name: item)
-                        }) {
-                            Label("Delete", systemImage: "trash")
-                        }
+                        // Button(action: {
+                        //     deleteItem(name: item)
+                        // }) {
+                        //     Label("Delete", systemImage: "trash")
+                        // }
                     }
-                    .onTapGesture {
-                        if showDeleteConfirmation {
-                            if isSelected {
-                                selectedItems.remove(item)
-                            } else {
-                                selectedItems.insert(item)
-                            }
-                        } else {
-                            // Handle tapping on the video when not in select items mode
-                        }
-                    }
+                //  .onTapGesture {
+                //   if showDeleteConfirmation {
+                //        if isSelected {
+                //            selectedItems.remove(item)
+                // //         } else {
+                                //            selectedItems.insert(item)
+                //           }
+                //       } else {
+                //            // Handle tapping on the video when not in select items mode
+                //        }
+                //     }
             }
         }
     }
@@ -702,10 +722,6 @@ struct GalleryView: View {
         }
         .padding(.bottom, 20) // Moved this inside
     }
-    
-    
-    
-
     
     struct GalleryView_Previews: PreviewProvider {
         static var previews: some View {
