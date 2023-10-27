@@ -78,14 +78,8 @@ class DataManager {
     }
 }
 
-
-
 struct AlbumDetailView: View {
     let dataManager = DataManager()
-    
-    @State private var isSelecting: Bool = false
-    @State private var selectedItems: Set<UUID> = []
-
 
     @ObservedObject var album: Album
     @State private var isMediaPickerPresented: Bool = false
@@ -93,69 +87,25 @@ struct AlbumDetailView: View {
     let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4) // 4 column-based view
     
     var body: some View {
-          VStack {
-              Text(album.name)
-                  .font(.largeTitle)
-                  .padding()
-              
-              // Add buttons for selection mode, save, and delete
-              HStack {
-                  Button(action: {
-                      isSelecting.toggle()
-                      selectedItems.removeAll()
-                  }) {
-                      Text(isSelecting ? "Cancel" : "Select")
-                  }
-                  
-                  Spacer()
-                  
-                  if isSelecting {
-                      Button(action: saveSelectedItemsToCameraRoll) {
-                          Text("Save to Camera Roll")
-                      }
-                      
-                      Button(action: deleteSelectedItems) {
-                          Text("Delete")
-                      }
-                  }
-              }
-              .padding()
-
-              ScrollView {
-                  LazyVGrid(columns: columns, spacing: 16) {
-                      ForEach(album.mediaItems, id: \.self) { mediaItem in
-                          ZStack {
-                              if mediaItem.hasSuffix(".jpg"), let image = loadImage(name: mediaItem) {
-                                  Image(uiImage: image)
-                                      .resizable()
-                                      .scaledToFit()
-                              } else if mediaItem.hasSuffix(".mov") {
-                                  Text("Video Placeholder")
-                              } else {
-                                  EmptyView()
-                              }
-
-                              if isSelecting && selectedItems.contains(mediaItem) {
-                                  Rectangle()
-                                      .fill(Color.black.opacity(0.5))
-                                  Image(systemName: "checkmark.circle.fill")
-                                      .foregroundColor(.white)
-                              }
-                          }
-                          .onTapGesture {
-                              if isSelecting {
-                                  if selectedItems.contains(mediaItem) {
-                                      selectedItems.remove(mediaItem)
-                                  } else {
-                                      selectedItems.insert(mediaItem)
-                                  }
-                              } else {
-                                  // Existing code to handle tap on media item when not in selection mode.
-                              }
-                          }
-                      }
-                  }
-              }
+        VStack {
+            Text(album.name)
+                .font(.largeTitle)
+                .padding()
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(album.mediaItems, id: \.self) { mediaItem in
+                        if mediaItem.hasSuffix(".jpg"), let image = loadImage(name: mediaItem) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFit()
+                        } else if mediaItem.hasSuffix(".mov") {
+                            Text("Video Placeholder")
+                        } else {
+                            EmptyView()
+                        }
+                    }
+                }
+            }
             
             // Button to add new media to the album
             Button(action: {
@@ -186,42 +136,7 @@ struct AlbumDetailView: View {
                 dataManager.saveAlbums(albums: [album]) // Save album once after handling media
             }
         }
-        
-        func saveImageToPhotosLibrary(_ image: UIImage) {
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAsset(from: image)
-            }) { (success, error) in
-                if let error = error {
-                    print("Error saving image to Photos library: \(error.localizedDescription)")
-                } else if success {
-                    print("Successfully saved image to Photos library!")
-                }
-            }
-        }
-        
-        
-        
-        func saveSelectedItemsToCameraRoll() {
-                for item in selectedItems {
-                    if item.hasSuffix(".jpg"), let image = loadImage(name: item) {
-                        saveImageToPhotosLibrary(image)
-                    } else if item.hasSuffix(".mov"), let videoURL = loadVideo(name: item) {
-                        saveVideoToPhotosLibrary(url: videoURL)
-                    }
-                }
-                isSelecting = false
-                selectedItems.removeAll()
-            }
-
-            func deleteSelectedItems() {
-                album.mediaItems.removeAll { selectedItems.contains($0) }
-                selectedItems.removeAll()
-                // Save the updated album
-                dataManager.saveAlbums(albums: [album])
-            }
     }
-    
-    
 
     
     func saveVideo(videoURL: URL, name: String) {
@@ -374,8 +289,6 @@ struct MediaPicker: UIViewControllerRepresentable {
             picker.dismiss(animated: true)
         }
         
-        
-        
         private func saveVideo(videoURL: URL, name: String) -> URL {
             let fileManager = FileManager.default
             
@@ -423,11 +336,11 @@ struct GalleryView: View {
     func saveImageToPhotosLibrary(_ image: UIImage) {
         PHPhotoLibrary.shared().performChanges({
             PHAssetChangeRequest.creationRequestForAsset(from: image)
-        }) { (success, error) in
-            if let error = error {
-                print("Error saving image to Photos library: \(error.localizedDescription)")
-            } else if success {
-                print("Successfully saved image to Photos library!")
+        }) { success, error in
+            if !success {
+                print("Error saving image: \(String(describing: error))")
+            } else {
+                print("Image saved successfully")
             }
         }
     }
@@ -792,3 +705,4 @@ struct GalleryView: View {
         }
     }
 }
+
