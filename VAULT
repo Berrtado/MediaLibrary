@@ -78,6 +78,72 @@ class DataManager {
     }
 }
 
+struct AVPlayerView: UIViewRepresentable {
+    var url: URL
+    private let player: AVPlayer
+
+    init(url: URL) {
+        self.url = url
+        self.player = AVPlayer(url: url)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = PlayerUIView(player: player)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // Nothing to update for now
+    }
+}
+
+class PlayerUIView: UIView {
+    private var playerLayer: AVPlayerLayer!
+    private var player: AVPlayer!
+
+    init(player: AVPlayer) {
+        super.init(frame: .zero)
+        self.player = player
+        setupPlayerLayer()
+        setupTapGesture()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupPlayerLayer()
+        setupTapGesture()
+    }
+
+    private func setupPlayerLayer() {
+        playerLayer = AVPlayerLayer(player: player)
+        playerLayer.videoGravity = .resizeAspect
+        layer.addSublayer(playerLayer)
+    }
+
+    private func setupTapGesture() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        self.addGestureRecognizer(tap)
+    }
+
+    @objc private func handleTap() {
+        if player.timeControlStatus == .paused {
+            player.play()
+        } else {
+            player.pause()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        playerLayer.frame = bounds
+    }
+}
+func loadVideo(name: String) -> URL? {
+    let path = getDocumentsDirectory().appendingPathComponent(name)
+    return URL(fileURLWithPath: path.path)
+}
+
+
 struct AlbumDetailView: View {
     let dataManager = DataManager()
     
@@ -89,24 +155,24 @@ struct AlbumDetailView: View {
     let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4) // 4 column-based view
     
     var body: some View {
-           VStack {
-               
-               Text(album.name)
-                   .font(.largeTitle)
-                   .padding()
-               ScrollView {
-                   LazyVGrid(columns: columns, spacing: 16) {
-                       ForEach(album.mediaItems, id: \.self) { mediaItem in
+        VStack {
+            
+            Text(album.name)
+                .font(.largeTitle)
+                .padding()
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(album.mediaItems, id: \.self) { mediaItem in
                         if mediaItem.hasSuffix(".jpg"), let image = loadImage(name: mediaItem) {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFit()
                                 .overlay(
-                                       Image(systemName: "xmark.circle")
-                                           .foregroundColor(.black)
-                                           .font(.system(size: 50, weight: .bold))
-                                           .opacity(isInDeletionMode ? 1 : 0)
-                                   )
+                                    Image(systemName: "xmark.circle")
+                                        .foregroundColor(.black)
+                                        .font(.system(size: 50, weight: .bold))
+                                        .opacity(isInDeletionMode ? 1 : 0)
+                                )
                                 .onTapGesture {
                                     if isInDeletionMode {
                                         if let index = album.mediaItems.firstIndex(of: mediaItem) {
@@ -138,23 +204,46 @@ struct AlbumDetailView: View {
                                             .shadow(color: .gray, radius: 4, x: 1, y: 1)
                                     }
                                 })
-
-                        } else if mediaItem.hasSuffix(".mov") {
-                            Text("Video Placeholder")
+                            
+                        }
+                            else if mediaItem.hasSuffix(".mov"), let videoURL = loadVideo(name: mediaItem) {
+                               AVPlayerView(url: videoURL)
+                                   .frame(width: 200, height: 200) // Adjust the frame size as needed
+                        }
+                    }
                 }
             }
-        }
-    }
             
-            // Button to add new media to the album
-            Button(action: {
-                isMediaPickerPresented.toggle()
-            }) {
-                HStack {
-                    Image(systemName: selectedMediaType == .images ? "photo" : "video")
-                    Text(selectedMediaType == .images ? "Insert Images" : "Insert Videos")
+            HStack(spacing: 10) { // Added spacing between buttons
+                // Existing button for inserting images
+                Button(action: {
+                    selectedMediaType = .images
+                    isMediaPickerPresented.toggle()
+                }) {
+                    HStack {
+                        Image(systemName: "photo")
+                        Text("Insert Images")
+                    }
                 }
-                .padding(.horizontal, 30)
+                .padding(.horizontal, 15) // Reduced horizontal padding
+                .padding(.vertical, 15)
+                .background(Color.black)
+                .foregroundColor(.white)
+                .cornerRadius(20)
+                .shadow(color: .gray, radius: 3, x: 1, y: 1)
+                .padding(.bottom, 16)
+                
+                // New button for inserting videos
+                Button(action: {
+                    selectedMediaType = .videos
+                    isMediaPickerPresented.toggle()
+                }) {
+                    HStack {
+                        Image(systemName: "video")
+                        Text("Insert Videos")
+                    }
+                }
+                .padding(.horizontal, 15) // Reduced horizontal padding
                 .padding(.vertical, 15)
                 .background(Color.black)
                 .foregroundColor(.white)
@@ -347,14 +436,14 @@ struct MediaPicker: UIViewControllerRepresentable {
 
 
 struct GalleryView: View {
-
+    
     @State private var albums: [Album] = []
     @State private var isCreatingAlbum = false
     @State private var newAlbumName = ""
     @State private var currentAlbum: Album?
     
     @State private var selectedImages: [String] = []
-
+    
     
     let dataManager = DataManager()
     
@@ -478,7 +567,7 @@ struct GalleryView: View {
                         .cornerRadius(10)
                     }
                     .padding()
-                  
+                    
                     
                 }
                 
@@ -494,10 +583,10 @@ struct GalleryView: View {
             .font(.custom("Futura-Bold", size: 15))
             
             .onAppear {
-                       self.albums = dataManager.loadAlbums()
-                   }
-               }
-           }
+                self.albums = dataManager.loadAlbums()
+            }
+        }
+    }
     
     func saveSelectedImagesToCameraRoll() {
         for imageName in selectedImages {
@@ -506,7 +595,7 @@ struct GalleryView: View {
             }
         }
     }
-
+    
     
     func saveAlbums(albums: [Album]) {
         do {
@@ -557,7 +646,7 @@ struct GalleryView: View {
                     }
                 }
                 var allAlbums = dataManager.loadAlbums()
-
+                
                 if let index = allAlbums.firstIndex(where: { $0.name == album.name }) {
                     allAlbums[index] = album
                     dataManager.saveAlbums(albums: allAlbums)
@@ -570,20 +659,20 @@ struct GalleryView: View {
         }
         currentAlbum = album
     }
-
+    
     func saveImage(image: UIImage, name: String) {
         if let data = image.jpegData(compressionQuality: 1.0) {
             let filename = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name).appendingPathExtension("jpg")
             try? data.write(to: filename)
         }
     }
-       
-       func loadImage(name: String) -> UIImage? {
-           guard name.lowercased().hasSuffix(".jpg") else { return nil }
-           
-           let imagePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
-           return UIImage(contentsOfFile: imagePath.path)
-       }
+    
+    func loadImage(name: String) -> UIImage? {
+        guard name.lowercased().hasSuffix(".jpg") else { return nil }
+        
+        let imagePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!.appendingPathComponent(name)
+        return UIImage(contentsOfFile: imagePath.path)
+    }
     
     private var albumSwitcher: some View {
         HStack {
@@ -672,7 +761,7 @@ struct GalleryView: View {
                     //   }) {
                     //        Label("Delete", systemImage: "trash")
                     //    }
-                       }
+                }
                 .onTapGesture {
                     if showDeleteConfirmation {
                         if isSelected {
@@ -701,7 +790,7 @@ struct GalleryView: View {
                             Label("Save to Camera Roll", systemImage: "square.and.arrow.down")
                         }
                         
-                       
+                        
                     }
             }
         }
@@ -746,10 +835,11 @@ struct GalleryView: View {
         }
         .padding(.bottom, 20) // Moved this inside
     }
+}
     
     struct GalleryView_Previews: PreviewProvider {
         static var previews: some View {
             GalleryView()
         }
     }
-}
+
