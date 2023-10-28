@@ -1,4 +1,4 @@
- import SwiftUI
+import SwiftUI
 import AVKit
 import Photos
 import PhotosUI
@@ -842,4 +842,3 @@ struct GalleryView: View {
             GalleryView()
         }
     }
-
